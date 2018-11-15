@@ -57,13 +57,15 @@ def get_loader(config):
                                   batch_size=batch_size,
                                   shuffle=True,
                                   collate_fn=detection_collate,
-                                  )
+                                  num_workers=4,
+                                  pin_memory=True)
 
     if test_dataset is not None:
         test_loader = DataLoader(dataset=test_dataset,
                                  batch_size=batch_size,
                                  shuffle=False,
                                  collate_fn=detection_collate,
-                                 )
+                                 num_workers=4,
+                                 pin_memory=True)
 
     return train_loader, test_loader

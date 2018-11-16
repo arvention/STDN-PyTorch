@@ -46,7 +46,8 @@ class Solver(object):
         """
 
         # instatiate model
-        self.model = STDN(stdn_config=self.stdn_config,
+        self.model = STDN(mode=self.mode,
+                          stdn_config=self.stdn_config,
                           channels=self.input_channels,
                           class_count=self.class_count,
                           num_anchors=self.num_anchors)

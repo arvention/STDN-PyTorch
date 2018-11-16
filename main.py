@@ -87,7 +87,7 @@ if __name__ == '__main__':
                         default=[80000, 100000, 120000])
     parser.add_argument('--sched_gamma', type=float, default=0.1)
 
-    # DenseNet settings
+    # architecture settings
     parser.add_argument('--stdn_config', type=str, default='300',
                         choices=['300'])
     parser.add_argument('--num_anchors', type=int, default=8)

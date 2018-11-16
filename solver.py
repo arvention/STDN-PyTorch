@@ -45,10 +45,6 @@ class Solver(object):
         Instantiate the model, loss criterion, and optimizer
         """
 
-        # instantiate anchor boxes
-        anchor_boxes = AnchorBox(self.new_size)
-        self.anchor_boxes = anchor_boxes.get_boxes()
-
         # instatiate model
         self.model = STDN(stdn_config=self.stdn_config,
                           channels=self.input_channels,
@@ -63,6 +59,11 @@ class Solver(object):
                                    lr=self.lr,
                                    momentum=self.momentum,
                                    weight_decay=self.weight_decay)
+
+        # instatiate anchor boxes
+        anchor_boxes = AnchorBox(map_sizes=self.model.get_out_map_sizes(),
+                                 aspect_ratios=self.aspect_ratios)
+        self.anchor_boxes = anchor_boxes.get_boxes()
 
         # print network
         self.print_network(self.model, 'SSD')

@@ -45,11 +45,19 @@ class Solver(object):
         Instantiate the model, loss criterion, and optimizer
         """
 
+        # instatiate anchor boxes
+        anchor_boxes = AnchorBox(map_sizes=self.model.get_out_map_sizes(),
+                                 aspect_ratios=self.aspect_ratios)
+        self.anchor_boxes = anchor_boxes.get_boxes()
+        if torch.cuda.is_available() and self.use_gpu:
+            self.anchor_boxes = self.anchor_boxes.cuda()
+
         # instatiate model
         self.model = STDN(mode=self.mode,
                           stdn_config=self.stdn_config,
                           channels=self.input_channels,
                           class_count=self.class_count,
+                          anchor=self.anchor_boxes,
                           num_anchors=self.num_anchors)
 
         # instatiate loss criterion
@@ -60,11 +68,6 @@ class Solver(object):
                                    lr=self.lr,
                                    momentum=self.momentum,
                                    weight_decay=self.weight_decay)
-
-        # instatiate anchor boxes
-        anchor_boxes = AnchorBox(map_sizes=self.model.get_out_map_sizes(),
-                                 aspect_ratios=self.aspect_ratios)
-        self.anchor_boxes = anchor_boxes.get_boxes()
 
         # print network
         self.print_network(self.model, 'SSD')

@@ -26,6 +26,7 @@ class STDN(nn.Module):
                  stdn_config,
                  channels,
                  class_count,
+                 anchors,
                  num_anchors):
         super(STDN, self).__init__()
         self.mode = mode
@@ -33,6 +34,7 @@ class STDN(nn.Module):
         self.stdn_out = stdn_out[stdn_config]
         self.channels = channels
         self.class_count = class_count
+        self.anchors = anchors
         self.num_anchors = num_anchors
 
         # self.init_weights()
@@ -77,7 +79,8 @@ class STDN(nn.Module):
         if self.mode == 'test':
             output = self.detect(
                 self.softmax(class_preds),
-                loc_preds
+                loc_preds,
+                self.anchors
             )
         else:
             output = (

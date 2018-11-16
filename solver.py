@@ -46,11 +46,9 @@ class Solver(object):
         """
 
         # instatiate anchor boxes
-        anchor_boxes = AnchorBox(map_sizes=self.model.get_out_map_sizes(),
+        anchor_boxes = AnchorBox(map_sizes=[(1, 800), (3, 960), (5, 1120), (9, 1280), (18, 360), (36, 104)],
                                  aspect_ratios=self.aspect_ratios)
         self.anchor_boxes = anchor_boxes.get_boxes()
-        if torch.cuda.is_available() and self.use_gpu:
-            self.anchor_boxes = self.anchor_boxes.cuda()
 
         # instatiate model
         self.model = STDN(mode=self.mode,
@@ -70,13 +68,13 @@ class Solver(object):
                                    weight_decay=self.weight_decay)
 
         # print network
-        self.print_network(self.model, 'SSD')
+        self.print_network(self.model, 'STDN')
 
         # use gpu if enabled
         if torch.cuda.is_available() and self.use_gpu:
             self.model.cuda()
             self.criterion.cuda()
-            self.anchor_boxes = self.anchor_boxes.cuda()
+            self.anchor_boxes.cuda()
 
     def print_network(self, model, name):
         """

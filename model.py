@@ -2,6 +2,7 @@ import torch.nn as nn
 from layers.scale_transfer_module import ScaleTransferModule
 from layers.multibox import MultiBox
 from torchvision.models import densenet169
+from layers.detection import Detect
 
 
 """
@@ -21,11 +22,13 @@ class STDN(nn.Module):
     """STDN Architecture"""
 
     def __init__(self,
+                 mode,
                  stdn_config,
                  channels,
                  class_count,
                  num_anchors):
         super(STDN, self).__init__()
+        self.mode = mode
         self.stdn_in = stdn_in[stdn_config]
         self.stdn_out = stdn_out[stdn_config]
         self.channels = channels
@@ -39,6 +42,10 @@ class STDN(nn.Module):
         self.multibox = MultiBox(num_channels=self.stdn_out,
                                  num_anchors=self.num_anchors,
                                  class_count=self.class_count)
+
+        if mode == 'test':
+            self.softmax = nn.Softmax(dim=-1)
+            self.detect = Detect(class_count, 200, 0.01, 0.45)
 
     def get_out_map_sizes(self):
         return [x for x, _ in self.stdn_out]
@@ -65,6 +72,16 @@ class STDN(nn.Module):
             output.append(y[:, :stop, :, :])
 
         y = self.scale_transfer_module(output)
-        class_y, loc_y = self.multibox(y)
+        class_preds, loc_preds = self.multibox(y)
 
-        return class_y, loc_y
+        if self.mode == 'test':
+            output = self.detect(
+                self.softmax(class_preds),
+                loc_preds
+            )
+        else:
+            output = (
+                class_preds,
+                loc_preds
+            )
+        return output

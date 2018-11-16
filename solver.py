@@ -49,6 +49,8 @@ class Solver(object):
         anchor_boxes = AnchorBox(map_sizes=[1, 3, 5, 9, 18, 36],
                                  aspect_ratios=self.aspect_ratios)
         self.anchor_boxes = anchor_boxes.get_boxes()
+        if torch.cuda.is_available and self.use_gpu:
+            self.anchor_boxes = self.anchor_boxes.cuda()
 
         # instatiate model
         self.model = STDN(mode=self.mode,
@@ -74,7 +76,6 @@ class Solver(object):
         if torch.cuda.is_available() and self.use_gpu:
             self.model.cuda()
             self.criterion.cuda()
-            self.anchor_boxes.cuda()
 
     def print_network(self, model, name):
         """

@@ -46,7 +46,7 @@ class Solver(object):
         """
 
         # instatiate anchor boxes
-        anchor_boxes = AnchorBox(map_sizes=[(1, 800), (3, 960), (5, 1120), (9, 1280), (18, 360), (36, 104)],
+        anchor_boxes = AnchorBox(map_sizes=[1, 3, 5, 9, 18, 36],
                                  aspect_ratios=self.aspect_ratios)
         self.anchor_boxes = anchor_boxes.get_boxes()
 

@@ -6,6 +6,7 @@ import time
 import datetime
 import pickle
 import torch.optim as optim
+from tqdm import tqdm
 from utils.utils import to_var
 
 from model import STDN
@@ -96,39 +97,49 @@ class Solver(object):
             self.model_save_path, '{}.pth'.format(self.pretrained_model))))
         print('loaded trained model ver {}'.format(self.pretrained_model))
 
-    def adjust_learning_rate(self, optimizer, gamma, step):
+    def adjust_learning_rate(self,
+                             optimizer,
+                             gamma,
+                             step,
+                             i=None,
+                             iters_per_epoch=None,
+                             epoch=None):
         """Sets the learning rate to the initial LR decayed by 10 at every
             specified step
         # Adapted from PyTorch Imagenet example:
         # https://github.com/pytorch/examples/blob/master/imagenet/main.py
         """
-        lr = self.lr * (gamma ** (step))
+        if self.warmup and epoch < self.warmup_step:
+            lr = 1e-6 + (self.lr-1e-6) * i / (iters_per_epoch * 5)
+        else:
+            lr = self.lr * (gamma ** (step))
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
     def print_loss_log(self,
                        start_time,
-                       cur_iter,
+                       cur,
+                       total,
                        class_loss,
                        loc_loss,
                        loss):
         """
         Prints the loss and elapsed time for each epoch
         """
-        total_iter = self.num_iterations
 
         elapsed = time.time() - start_time
-        total_time = (total_iter - cur_iter) * elapsed / (cur_iter + 1)
+        total_time = (total - cur) * elapsed / (cur + 1)
 
         total_time = str(datetime.timedelta(seconds=total_time))
         elapsed = str(datetime.timedelta(seconds=elapsed))
 
-        log = "Elapsed {} -- {}, Iter [{}/{}]\n" \
+        log = "Elapsed {} -- {}, {} [{}/{}]\n" \
               "class_loss: {:.4f}, loc_loss: {:.4f}, " \
               "loss: {:.4f}".format(elapsed,
                                     total_time,
-                                    cur_iter + 1,
-                                    total_iter,
+                                    self.counter,
+                                    cur + 1,
+                                    total,
                                     class_loss.item(),
                                     loc_loss.item(),
                                     loss.item())
@@ -176,26 +187,11 @@ class Solver(object):
         # return loss
         return class_loss, loc_loss, loss
 
-    def train(self):
-        """
-        training process
-        """
-
-        # set model in training mode
-        self.model.train()
-
-        self.losses = []
+    def train_iter(self, start):
         step_index = 0
-
-        # start with a trained model if exists
-        if self.pretrained_model:
-            start = int(self.pretrained_model.split('/')[-1])
-        else:
-            start = 0
-
-        # start training
         start_time = time.time()
         batch_iterator = iter(self.train_loader)
+
         for i in range(start, self.num_iterations):
 
             if i in self.sched_milestones:
@@ -218,7 +214,8 @@ class Solver(object):
             # print out loss log
             if (i + 1) % self.loss_log_step == 0:
                 self.print_loss_log(start_time=start_time,
-                                    cur_iter=i,
+                                    cur=i,
+                                    total=self.num_iterations,
                                     class_loss=class_loss,
                                     loc_loss=loc_loss,
                                     loss=loss)
@@ -229,6 +226,66 @@ class Solver(object):
                 self.save_model(i)
 
         self.save_model(i)
+
+    def train_epoch(self, start):
+        step_index = 0
+        start_time = time.time()
+        iters_per_epoch = len(self.train_loader)
+
+        for e in range(start, self.num_epochs):
+
+            if e in self.sched_milestones:
+                step_index += 1
+
+            for i, (images, targets) in enumerate(tqdm(self.train_loader)):
+                self.adjust_learning_rate(optimizer=self.optimizer,
+                                          gamma=self.sched_gamma,
+                                          step=step_index,
+                                          i=i,
+                                          iters_per_epoch=iters_per_epoch,
+                                          epoch=e)
+
+                images = to_var(images, self.use_gpu)
+                targets = [to_var(target, self.use_gpu) for target in targets]
+
+                class_loss, loc_loss, loss = self.model_step(images, targets)
+
+            # print out loss log
+            if (e + 1) % self.loss_log_step == 0:
+                self.print_loss_log(start_time=start_time,
+                                    cur=e,
+                                    total=self.num_epochs,
+                                    class_loss=class_loss,
+                                    loc_loss=loc_loss,
+                                    loss=loss)
+                self.losses.append([e, class_loss, loc_loss, loss])
+
+            # save model
+            if (e + 1) % self.model_save_step == 0:
+                self.save_model(e)
+
+        self.save_model(e)
+
+    def train(self):
+        """
+        training process
+        """
+
+        # set model in training mode
+        self.model.train()
+
+        self.losses = []
+
+        # start with a trained model if exists
+        if self.pretrained_model:
+            start = int(self.pretrained_model.split('/')[-1])
+        else:
+            start = 0
+
+        if self.counter == 'iter':
+            self.train_iter(start)
+        elif self.counter == 'epoch':
+            self.train_epoch(start)
 
         # print losses
         print('\n--Losses--')
@@ -249,36 +306,40 @@ class Solver(object):
         det_file = osp.join(results_path,
                             'detections.pkl')
 
-        for i in range(num_images):
-            image, target, h, w = dataset.pull_item(i)
+        detect_times = []
 
-            image = to_var(image.unsqueeze(0), self.use_gpu)
+        with torch.no_grad():
+            for i in range(num_images):
+                image, target, h, w = dataset.pull_item(i)
 
-            _t['im_detect'].tic()
-            detections = self.model(image).data
-            detect_time = _t['im_detect'].toc(average=False)
+                image = to_var(image.unsqueeze(0), self.use_gpu)
 
-            # skip j = 0 because it is the background class
-            for j in range(1, detections.shape[1]):
-                dets = detections[0, j, :]
-                mask = dets[:, 0].gt(0.).expand(5, dets.size(0)).t()
-                dets = torch.masked_select(dets, mask).view(-1, 5)
-                if dets.shape[0] == 0:
-                    continue
-                boxes = dets[:, 1:]
-                boxes[:, 0] *= w
-                boxes[:, 2] *= w
-                boxes[:, 1] *= h
-                boxes[:, 3] *= h
-                scores = dets[:, 0].cpu().numpy()
-                cls_dets = np.hstack((boxes.cpu().numpy(),
-                                      scores[:, np.newaxis])).astype(np.float32,
-                                                                     copy=False)
-                all_boxes[j][i] = cls_dets
+                _t['im_detect'].tic()
+                detections = self.model(image).data
+                detect_time = _t['im_detect'].toc(average=False)
+                detect_times.append(detect_time)
 
-            print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1,
-                                                        num_images,
-                                                        detect_time))
+                # skip j = 0 because it is the background class
+                for j in range(1, detections.shape[1]):
+                    dets = detections[0, j, :]
+                    mask = dets[:, 0].gt(0.).expand(5, dets.size(0)).t()
+                    dets = torch.masked_select(dets, mask).view(-1, 5)
+                    if dets.shape[0] == 0:
+                        continue
+                    boxes = dets[:, 1:]
+                    boxes[:, 0] *= w
+                    boxes[:, 2] *= w
+                    boxes[:, 1] *= h
+                    boxes[:, 3] *= h
+                    scores = dets[:, 0].cpu().numpy()
+                    cls_dets = np.hstack((boxes.cpu().numpy(),
+                                          scores[:, np.newaxis])).astype(np.float32,
+                                                                         copy=False)
+                    all_boxes[j][i] = cls_dets
+
+                print('im_detect: {:d}/{:d} {:.3f}'.format(i + 1,
+                                                           num_images,
+                                                           detect_time))
 
         with open(det_file, 'wb') as f:
             pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
@@ -288,6 +349,19 @@ class Solver(object):
         if self.dataset == 'voc':
             voc_save(all_boxes, dataset, results_path)
             do_python_eval(results_path, dataset)
+
+        detect_times = np.asarray(detect_times)
+        detect_times.sort()
+        print('fps[0500]:', (1 / np.mean(detect_times[:500])))
+        print('fps[1000]:', (1 / np.mean(detect_times[:1000])))
+        print('fps[1500]:', (1 / np.mean(detect_times[:1500])))
+        print('fps[2000]:', (1 / np.mean(detect_times[:2000])))
+        print('fps[2500]:', (1 / np.mean(detect_times[:2500])))
+        print('fps[3000]:', (1 / np.mean(detect_times[:3000])))
+        print('fps[3500]:', (1 / np.mean(detect_times[:3500])))
+        print('fps[4000]:', (1 / np.mean(detect_times[:4000])))
+        print('fps[4500]:', (1 / np.mean(detect_times[:4500])))
+        print('fps[all]:', (1 / np.mean(detect_times)))
 
     def test(self):
         """

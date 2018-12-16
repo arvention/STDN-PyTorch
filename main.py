@@ -77,21 +77,28 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
-    parser.add_argument('--num_iterations', type=int, default=120000)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--pretrained_model', type=str,
                         default=None)
-
-    # scheduler settings
-    parser.add_argument('--sched_milestones', type=list,
-                        default=[80000, 100000, 120000])
-    parser.add_argument('--sched_gamma', type=float, default=0.1)
 
     # architecture settings
     parser.add_argument('--stdn_config', type=str, default='300',
                         choices=['300'])
     parser.add_argument('--num_anchors', type=int, default=8)
     parser.add_argument('--aspect_ratios', type=list, default=[1.6, 2, 3])
+
+    # step size
+    parser.add_argument('--counter', type=str, default='iter',
+                        choices=['iter', 'epoch'])
+    parser.add_argument('--num_iterations', type=int, default=120000)
+    parser.add_argument('--num_epochs', type=int, default=250)
+    parser.add_argument('--loss_log_step', type=int, default=100)
+    parser.add_argument('--model_save_step', type=int, default=4000)
+
+    # scheduler settings
+    parser.add_argument('--sched_milestones', type=list,
+                        default=[80000, 100000, 120000])
+    parser.add_argument('--sched_gamma', type=float, default=0.1)
 
     # loss settings
     parser.add_argument('--loss_config', type=str, default='multibox',
@@ -120,10 +127,6 @@ if __name__ == '__main__':
     # path
     parser.add_argument('--model_save_path', type=str, default='./models')
     parser.add_argument('--result_save_path', type=str, default='./results')
-
-    # step size
-    parser.add_argument('--loss_log_step', type=int, default=100)
-    parser.add_argument('--model_save_step', type=int, default=4000)
 
     config = parser.parse_args()
 

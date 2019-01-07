@@ -27,7 +27,8 @@ class STDN(nn.Module):
                  channels,
                  class_count,
                  anchors,
-                 num_anchors):
+                 num_anchors,
+                 new_size):
         super(STDN, self).__init__()
         self.mode = mode
         self.stdn_in = stdn_in[stdn_config]
@@ -36,11 +37,12 @@ class STDN(nn.Module):
         self.class_count = class_count
         self.anchors = anchors
         self.num_anchors = num_anchors
+        self.new_size = new_size
 
         # self.init_weights()
 
         self.densenet = densenet169(pretrained=True)
-        self.scale_transfer_module = ScaleTransferModule()
+        self.scale_transfer_module = ScaleTransferModule(self.new_size)
         self.multibox = MultiBox(num_channels=self.stdn_out,
                                  num_anchors=self.num_anchors,
                                  class_count=self.class_count)

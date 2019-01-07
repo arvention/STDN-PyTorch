@@ -59,7 +59,8 @@ class Solver(object):
                           channels=self.input_channels,
                           class_count=self.class_count,
                           anchors=self.anchor_boxes,
-                          num_anchors=self.num_anchors)
+                          num_anchors=self.num_anchors,
+                          new_size=self.new_size)
 
         # instatiate loss criterion
         self.criterion = get_loss(config=self.config)
